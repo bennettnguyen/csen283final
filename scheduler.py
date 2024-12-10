@@ -18,15 +18,11 @@ class AdaptiveScheduler:
 
     def update_algorithm(self, predicted_load):
         HIGH_LOAD_THRESHOLD = 80
-        MEDIUM_LOAD_THRESHOLD = 50
 
         if predicted_load > HIGH_LOAD_THRESHOLD and self.algorithm != "Priority Scheduling":
             self.algorithm = "Priority Scheduling"
             self.switch_log.append((self.env.now, "Priority Scheduling"))
-        elif MEDIUM_LOAD_THRESHOLD < predicted_load <= HIGH_LOAD_THRESHOLD and self.algorithm != "SJF":
-            self.algorithm = "SJF"
-            self.switch_log.append((self.env.now, "SJF"))
-        elif predicted_load <= MEDIUM_LOAD_THRESHOLD and self.algorithm != "Round Robin":
+        elif predicted_load <= HIGH_LOAD_THRESHOLD and self.algorithm != "Round Robin":
             self.algorithm = "Round Robin"
             self.switch_log.append((self.env.now, "Round Robin"))
 
@@ -39,9 +35,7 @@ class AdaptiveScheduler:
                 if task.duration > 0:
                     self.env.process(self.schedule_task(task))
             elif self.algorithm == "Priority Scheduling":
-                yield self.env.timeout(task.duration)
-            elif self.algorithm == "SJF":
-                yield self.env.timeout(task.duration / 2)  
+                yield self.env.timeout(task.duration)  
 
 def task_generator(env, scheduler, arrival_interval=3):
     task_id = 0
