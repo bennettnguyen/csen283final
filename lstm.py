@@ -8,21 +8,25 @@ import warnings
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import load_model
+import argparse
 
-# Simulation parameters
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+parser.add_argument("--no-plots", action="store_true", help="Do not produce per-run plots")
+args = parser.parse_args()
+
+random.seed(args.seed)
+np.random.seed(args.seed)
+
 NUM_CORES = 4
 SIMULATION_TIME = 100           
 TASK_ARRIVAL_INTERVAL = 3       
 TIME_QUANTUM = 5               
 HIGH_LOAD_THRESHOLD = 70        
 
-# Ensure output directories
-os.makedirs("plots_lstm", exist_ok=True)
 MODEL_PATH = "models/saved_model/"
 
-# If no model found, create a dummy one for demonstration
 if not os.path.exists(MODEL_PATH):
-    # Create and train a dummy LSTM model on simple synthetic data
     dummy_data = np.sin(np.linspace(0, 20, 200)) * 50 + 50
     scaler = MinMaxScaler(feature_range=(0,1))
     scaled_data = scaler.fit_transform(dummy_data.reshape(-1,1))
@@ -40,7 +44,6 @@ if not os.path.exists(MODEL_PATH):
 
     from tensorflow.keras.models import Sequential
     from tensorflow.keras.layers import LSTM, Dense
-
     model = Sequential([
         LSTM(50, return_sequences=True, input_shape=(time_steps, 1)),
         LSTM(50),
@@ -53,16 +56,10 @@ if not os.path.exists(MODEL_PATH):
     model.save(os.path.join(MODEL_PATH, "model.h5"))
     joblib.dump(scaler, os.path.join(MODEL_PATH, "scaler.pkl"))
 
-# Load the pre-trained or dummy LSTM model and scaler
 model = load_model(os.path.join(MODEL_PATH, "model.h5"))
 scaler = joblib.load(os.path.join(MODEL_PATH, "scaler.pkl"))
 
 class LSTMPredictor:
-    """
-    Predicts future CPU load using an LSTM model.
-    Maintains a history of CPU utilization and uses
-    the last 'time_steps' readings to predict the next value.
-    """
     def __init__(self, history_size=20, time_steps=10):
         self.history = []
         self.history_size = history_size
@@ -87,9 +84,6 @@ class LSTMPredictor:
         return float(self.scaler.inverse_transform(pred)[0,0])
 
 class Task:
-    """
-    Represents a single task to be scheduled.
-    """
     def __init__(self, name, priority, duration, task_type):
         self.name = name
         self.priority = priority
@@ -97,16 +91,12 @@ class Task:
         self.task_type = task_type
 
 class AdaptiveScheduler:
-    """
-    Schedules tasks adaptively based on predicted CPU load.
-    Switches between Round Robin and Priority Scheduling.
-    """
     def __init__(self, env, cpu, predictor):
         self.env = env
         self.cpu = cpu
         self.predictor = predictor
         self.algorithm = "Round Robin"
-        self.switch_log = []  # Log to store algorithm switch events
+        self.switch_log = []
 
     def schedule_task(self, task):
         with self.cpu.request(priority=task.priority) as req:
@@ -117,22 +107,16 @@ class AdaptiveScheduler:
                 task.duration -= run_time
                 if task.duration > 0:
                     self.env.process(self.schedule_task(task))
-            else:  # Priority Scheduling
+            else:
                 yield self.env.timeout(task.duration)
 
     def update_algorithm(self, predicted_load):
         if predicted_load > HIGH_LOAD_THRESHOLD and self.algorithm != "Priority Scheduling":
             self.algorithm = "Priority Scheduling"
-            self.switch_log.append((self.env.now, "Priority Scheduling"))
         elif predicted_load <= HIGH_LOAD_THRESHOLD and self.algorithm != "Round Robin":
             self.algorithm = "Round Robin"
-            self.switch_log.append((self.env.now, "Round Robin"))
 
 def task_generator(env, scheduler, workload_type, workload_intensity):
-    """
-    Generates tasks according to the specified workload_type and workload_intensity.
-    Uses exponential distributions for arrival times based on the given intensity.
-    """
     task_id = 0
     while True:
         task_id += 1
@@ -165,10 +149,6 @@ def task_generator(env, scheduler, workload_type, workload_intensity):
         yield env.timeout(arrival_interval)
 
 def monitor(env, scheduler, predictor, utilization, workload_type, workload_intensity, data):
-    """
-    Monitors the CPU utilization over time.
-    Updates the predictor and the scheduler's algorithm based on the predicted load.
-    """
     while True:
         cpu_utilization = (NUM_CORES - scheduler.cpu.count) / NUM_CORES * 100
         utilization.append((env.now, cpu_utilization))
@@ -183,11 +163,7 @@ def monitor(env, scheduler, predictor, utilization, workload_type, workload_inte
         })
         yield env.timeout(1)
 
-def run_experiments():
-    """
-    Runs simulations for each workload type and intensity.
-    Collects results and plots CPU utilization graphs.
-    """
+def run_experiments(no_plots=False):
     summary_data = []
     for workload_type in ["CPU-bound", "IO-bound", "Mixed"]:
         for workload_intensity in ["Low", "Moderate", "High"]:
@@ -202,7 +178,6 @@ def run_experiments():
             env.process(monitor(env, scheduler, predictor, utilization, workload_type, workload_intensity, workload_data))
             env.run(until=SIMULATION_TIME)
 
-            # Save summary data
             df = pd.DataFrame(workload_data)
             metrics = {
                 "workload_type": workload_type,
@@ -211,23 +186,23 @@ def run_experiments():
             }
             summary_data.append(metrics)
 
-            # Plot CPU utilization over time
-            plt.figure(figsize=(10, 6))
-            plt.plot(df["time"], df["cpu_utilization"], label="CPU Utilization (%)", color="blue")
-            plt.axhline(HIGH_LOAD_THRESHOLD, color="red", linestyle="--", label=f"High Load Threshold ({HIGH_LOAD_THRESHOLD}%)")
-            plt.title(f"CPU Utilization Over Time - LSTM Scheduler\n{workload_type} - {workload_intensity}")
-            plt.xlabel("Time")
-            plt.ylabel("CPU Utilization (%)")
-            plt.legend()
-            plt.grid(alpha=0.5)
-            plot_filename = f"plots_lstm/{workload_type}_{workload_intensity}_lstm.png"
-            plt.savefig(plot_filename)
-            plt.close()
+            if not no_plots:
+                plt.figure(figsize=(10, 6))
+                plt.plot(df["time"], df["cpu_utilization"], label="CPU Utilization (%)", color="blue")
+                plt.axhline(HIGH_LOAD_THRESHOLD, color="red", linestyle="--", label=f"High Load Threshold ({HIGH_LOAD_THRESHOLD}%)")
+                plt.title(f"CPU Utilization Over Time - LSTM Scheduler\n{workload_type} - {workload_intensity}")
+                plt.xlabel("Time")
+                plt.ylabel("CPU Utilization (%)")
+                plt.legend()
+                plt.grid(alpha=0.5)
+                os.makedirs("plots_lstm", exist_ok=True)
+                plot_filename = f"plots_lstm/{workload_type}_{workload_intensity}_lstm.png"
+                plt.savefig(plot_filename)
+                plt.close()
 
     return pd.DataFrame(summary_data)
 
 if __name__ == "__main__":
-    summary = run_experiments()
+    summary = run_experiments(no_plots=args.no_plots)
     summary.to_csv("summary_lstm.csv", index=False)
     print("Summary data saved to 'summary_lstm.csv'")
-    print("Plots saved in 'plots_lstm' directory.")

@@ -6,18 +6,25 @@ from statsmodels.tsa.arima.model import ARIMA
 import pandas as pd
 import warnings
 import os
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+parser.add_argument("--no-plots", action="store_true", help="Do not produce per-run plots")
+args = parser.parse_args()
+
+random.seed(args.seed)
+np.random.seed(args.seed)
 
 # Simulation parameters
 NUM_CORES = 4
-SIMULATION_TIME = 100  # Total simulation time in units
-TASK_ARRIVAL_INTERVAL = 3  # Average time between task arrivals
-TIME_QUANTUM = 5  # Time slice for Round Robin
-HIGH_LOAD_THRESHOLD = 70  # CPU utilization (%) to switch to Priority Scheduling
+SIMULATION_TIME = 100  
+TASK_ARRIVAL_INTERVAL = 3  
+TIME_QUANTUM = 5  
+HIGH_LOAD_THRESHOLD = 70  
 
 os.makedirs("plots_arima", exist_ok=True)
 
-# Task class for simulation
 class Task:
     def __init__(self, name, priority, duration, task_type):
         self.name = name
@@ -25,7 +32,6 @@ class Task:
         self.duration = duration
         self.task_type = task_type
 
-# ARIMA-based workload predictor
 class ARIMAPredictor:
     def __init__(self, history_size=20):
         self.history = []
@@ -37,7 +43,7 @@ class ARIMAPredictor:
             self.history.pop(0)
 
     def predict(self):
-        if len(self.history) < self.history_size:  # Wait for sufficient history
+        if len(self.history) < self.history_size:
             return np.mean(self.history) if self.history else 0
         try:
             with warnings.catch_warnings():
@@ -49,14 +55,13 @@ class ARIMAPredictor:
         except Exception:
             return np.mean(self.history)
 
-# Adaptive Scheduler
 class AdaptiveScheduler:
     def __init__(self, env, cpu, predictor):
         self.env = env
         self.cpu = cpu
         self.predictor = predictor
         self.algorithm = "Round Robin"
-        self.switch_log = []  # Log to store algorithm switch events
+        self.switch_log = []
 
     def schedule_task(self, task):
         with self.cpu.request(priority=task.priority) as req:
@@ -66,7 +71,7 @@ class AdaptiveScheduler:
                 task.duration -= TIME_QUANTUM
                 if task.duration > 0:
                     self.env.process(self.schedule_task(task))
-            else:  # Priority Scheduling
+            else:
                 yield self.env.timeout(task.duration)
 
     def update_algorithm(self, predicted_load):
@@ -115,18 +120,17 @@ def monitor(env, scheduler, predictor, utilization, workload_type, workload_inte
         predictor.update(cpu_utilization)
         predicted_load = predictor.predict()
         scheduler.update_algorithm(predicted_load)
-        data.append(
-            {
-                "time": env.now,
-                "cpu_utilization": cpu_utilization,
-                "workload_type": workload_type,
-                "workload_intensity": workload_intensity,
-            }
-        )
+        data.append({
+            "time": env.now,
+            "cpu_utilization": cpu_utilization,
+            "workload_type": workload_type,
+            "workload_intensity": workload_intensity,
+        })
         yield env.timeout(1)
 
-def run_experiments():
+def run_experiments(no_plots=False):
     summary_data = []
+    all_data = {}  # If needed for timeseries averaging later
     for workload_type in ["CPU-bound", "IO-bound", "Mixed"]:
         for workload_intensity in ["Low", "Moderate", "High"]:
             env = simpy.Environment()
@@ -148,23 +152,23 @@ def run_experiments():
             }
             summary_data.append(metrics)
 
-            # Plot CPU utilization
-            plt.figure(figsize=(10, 6))
-            plt.plot(df["time"], df["cpu_utilization"], label="CPU Utilization (%)", color="blue")
-            plt.axhline(HIGH_LOAD_THRESHOLD, color="red", linestyle="--", label=f"High Load Threshold ({HIGH_LOAD_THRESHOLD}%)")
-            plt.title(f"CPU Utilization Over Time - ARIMA Scheduler\n{workload_type} - {workload_intensity}")
-            plt.xlabel("Time")
-            plt.ylabel("CPU Utilization (%)")
-            plt.legend()
-            plt.grid(alpha=0.5)
-            plot_filename = f"plots_arima/{workload_type}_{workload_intensity}_arima.png"
-            plt.savefig(plot_filename)
-            plt.close()
+            if not no_plots:
+                # Plot CPU utilization
+                plt.figure(figsize=(10, 6))
+                plt.plot(df["time"], df["cpu_utilization"], label="CPU Utilization (%)", color="blue")
+                plt.axhline(HIGH_LOAD_THRESHOLD, color="red", linestyle="--", label=f"High Load Threshold ({HIGH_LOAD_THRESHOLD}%)")
+                plt.title(f"CPU Utilization Over Time - ARIMA Scheduler\n{workload_type} - {workload_intensity}")
+                plt.xlabel("Time")
+                plt.ylabel("CPU Utilization (%)")
+                plt.legend()
+                plt.grid(alpha=0.5)
+                plot_filename = f"plots_arima/{workload_type}_{workload_intensity}_arima.png"
+                plt.savefig(plot_filename)
+                plt.close()
 
     return pd.DataFrame(summary_data)
 
 if __name__ == "__main__":
-    summary = run_experiments()
+    summary = run_experiments(no_plots=args.no_plots)
     summary.to_csv("summary_arima.csv", index=False)
     print("Summary data saved to 'summary_arima.csv'")
-    print("Plots saved in 'plots_arima' directory.")
