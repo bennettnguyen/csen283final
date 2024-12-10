@@ -19,10 +19,10 @@ random.seed(args.seed)
 np.random.seed(args.seed)
 
 NUM_CORES = 4
-SIMULATION_TIME = 100           
-TASK_ARRIVAL_INTERVAL = 3       
-TIME_QUANTUM = 5               
-HIGH_LOAD_THRESHOLD = 70        
+SIMULATION_TIME = 100
+TASK_ARRIVAL_INTERVAL = 3
+TIME_QUANTUM = 5
+HIGH_LOAD_THRESHOLD = 70
 
 MODEL_PATH = "models/saved_model/"
 
@@ -165,6 +165,7 @@ def monitor(env, scheduler, predictor, utilization, workload_type, workload_inte
 
 def run_experiments(no_plots=False):
     summary_data = []
+    all_scenario_data = []
     for workload_type in ["CPU-bound", "IO-bound", "Mixed"]:
         for workload_intensity in ["Low", "Moderate", "High"]:
             env = simpy.Environment()
@@ -179,6 +180,8 @@ def run_experiments(no_plots=False):
             env.run(until=SIMULATION_TIME)
 
             df = pd.DataFrame(workload_data)
+            all_scenario_data.append(df)
+
             metrics = {
                 "workload_type": workload_type,
                 "workload_intensity": workload_intensity,
@@ -199,6 +202,10 @@ def run_experiments(no_plots=False):
                 plot_filename = f"plots_lstm/{workload_type}_{workload_intensity}_lstm.png"
                 plt.savefig(plot_filename)
                 plt.close()
+
+    full_run_data = pd.concat(all_scenario_data, ignore_index=True)
+    full_run_data.to_csv("run_data.csv", index=False)
+    print("Per-run time series data saved to 'run_data.csv'")
 
     return pd.DataFrame(summary_data)
 
