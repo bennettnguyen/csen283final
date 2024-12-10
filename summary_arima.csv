@@ -1,0 +1,10 @@
+workload_type,workload_intensity,average_cpu_utilization
+CPU-bound,Low,60.75
+CPU-bound,Moderate,26.25
+CPU-bound,High,13.5
+IO-bound,Low,91.5
+IO-bound,Moderate,84.0
+IO-bound,High,56.75
+Mixed,Low,70.5
+Mixed,Moderate,49.0
+Mixed,High,19.0
