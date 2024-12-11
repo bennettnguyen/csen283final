@@ -18,7 +18,7 @@ os.makedirs("multi_trial_results/plots", exist_ok=True)
 
 def run_single_trial(algo, seed):
     script = ALGORITHMS[algo]
-    # Run with no-plots to avoid per-run plots, focusing on aggregated plotting
+    # Run with no-plots to avoid per-run plots, focus on aggregated plotting
     subprocess.run(["python", script, "--seed", str(seed), "--no-plots"], check=True)
     summary_file = {
         "arima": "summary_arima.csv",
@@ -27,21 +27,11 @@ def run_single_trial(algo, seed):
     }[algo]
 
     df_summary = pd.read_csv(summary_file)
-    df_run = pd.read_csv("run_data.csv")  # Per-trial time series data
+    df_run = pd.read_csv("run_data.csv")
     return df_summary, df_run
 
 def run_multiple_trials():
-    """
-    Run multiple trials and aggregate results.
-
-    We'll store:
-    - Average CPU utilization per trial (already in summary)
-    - Time-series data from run_data.csv for each trial to produce averaged time-series plots
-    """
     aggregated_results = []
-    # Structure to store time-series data:
-    # A dictionary keyed by (algo, workload_type, workload_intensity)
-    # Each value: a list of DataFrames for each trial's time-series data
     time_series_data = {}
 
     for algo in ALGORITHMS.keys():
@@ -61,9 +51,6 @@ def run_multiple_trials():
                     avg_util = row["average_cpu_utilization"].values[0]
                     trial_results.append(avg_util)
 
-                    # Filter the run_data for this scenario (it contains all times)
-                    # If run_data.csv contains multiple workload scenarios (it will),
-                    # filter for just w_type and intensity:
                     scenario_run = df_run[
                         (df_run["workload_type"] == w_type) &
                         (df_run["workload_intensity"] == intensity)
@@ -109,42 +96,16 @@ def plot_comparisons(df_agg):
             plt.close()
 
 def plot_boxplots(df_agg):
-    # Boxplot of distributions across all algorithms and scenarios
-    # This shows variance in avg CPU utilization across trials
     fig, ax = plt.subplots(figsize=(10, 6))
-    # We'll pivot the table to get rows as each scenario and columns as mean utilization
-    # Actually, we only have mean of means here. If we want to show actual distributions,
-    # we should store per-trial data. For demonstration, let's just show boxplots by scenario:
-
-    # It's better to store per-trial data in run_multiple_trials. Let's modify code to store trial-wise:
-    # Actually we have trial_results only local, let's store them:
-
-    # For simplicity, let's re-run trials inside plot. This isn't optimal. Instead, let's store them above.
-    # We'll store a global dict: scenario_trial_results.
-    pass  # We'll implement after we complete the main code
+  
 
 def plot_time_series(time_series_data):
-    """
-    Produce time-series line plots comparing algorithms.
-    We'll average CPU utilization over time for each scenario across all trials.
-    Then create line plots for each scenario (w_type, intensity) showing all algorithms on one plot.
-    """
-    # Average time-series data
-    # For each key (algo, w_type, intensity):
-    # 1) Find max time steps across trials. 
-    # 2) Interpolate or just join on time. Assuming all have same simulation length.
-
-    # To compare algorithms on the same plot, we need a uniform time index.
-    # We'll find the union of times from all trials and scenarios, then average.
-
     for w_type in WORKLOAD_TYPES:
         for intensity in WORKLOAD_INTENSITIES:
             fig, ax = plt.subplots(figsize=(10, 6))
 
             for algo in ALGORITHMS.keys():
                 trial_dfs = time_series_data[(algo, w_type, intensity)]
-                # Align times: We'll assume all runs have identical time steps (0 to SIMULATION_TIME)
-                # We can do a groupby on time and average
                 combined = pd.concat(trial_dfs)
                 avg_by_time = combined.groupby("time")["cpu_utilization"].mean()
 
@@ -160,12 +121,6 @@ def plot_time_series(time_series_data):
             plt.close()
 
 def plot_boxplots_per_scenario(time_series_data):
-    """
-    Create boxplots of average CPU utilization per trial per scenario.
-    This shows the distribution of per-trial average CPU utilization (not just the mean and std).
-
-    We'll compute the average CPU utilization per trial from the time-series data (to illustrate distribution).
-    """
     for w_type in WORKLOAD_TYPES:
         for intensity in WORKLOAD_INTENSITIES:
             data_for_box = []
@@ -192,10 +147,7 @@ def plot_boxplots_per_scenario(time_series_data):
 
 if __name__ == "__main__":
     df_agg, time_series_data = run_multiple_trials()
-    # Comparison bar charts (already implemented)
     plot_comparisons(df_agg)
-    # Time-series comparison plots
     plot_time_series(time_series_data)
-    # Boxplots to show distribution of average CPU utilization across trials
     plot_boxplots_per_scenario(time_series_data)
     print("All plots generated in multi_trial_results/plots/")
