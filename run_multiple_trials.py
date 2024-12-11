@@ -1,9 +1,23 @@
+"""
+Main Experiment Script
+This script automates the execution of multiple trials for different scheduling algorithms
+(ARIMA, LSTM, Round Robin) under varying workload types and intensities. It aggregates results,
+produces summary statistics, and generates comparative visualizations for analysis.
+
+Features:
+- Automates multiple trials for ARIMA, LSTM, and Round Robin algorithms.
+- Collects data for CPU utilization and performance metrics across workload scenarios.
+- Generates comparison plots (bar charts, time-series, and boxplots).
+- Outputs aggregated data for comprehensive analysis.
+"""
+
 import os
 import pandas as pd
 import numpy as np
 import subprocess
 import matplotlib.pyplot as plt
 
+# Configuration
 N_TRIALS = 5
 ALGORITHMS = {
     "arima": "arima.py",
@@ -13,12 +27,22 @@ ALGORITHMS = {
 WORKLOAD_TYPES = ["CPU-bound", "IO-bound", "Mixed"]
 WORKLOAD_INTENSITIES = ["Low", "Moderate", "High"]
 
+# Create directories for results
 os.makedirs("multi_trial_results", exist_ok=True)
 os.makedirs("multi_trial_results/plots", exist_ok=True)
 
 def run_single_trial(algo, seed):
+    """
+    Runs a single trial for a given algorithm.
+
+    Args:
+        algo (str): Algorithm name (arima, lstm, or roundrobin).
+        seed (int): Random seed for reproducibility.
+
+    Returns:
+        tuple: Summary DataFrame and full run DataFrame for the trial.
+    """
     script = ALGORITHMS[algo]
-    # Run with no-plots to avoid per-run plots, focus on aggregated plotting
     subprocess.run(["python", script, "--seed", str(seed), "--no-plots"], check=True)
     summary_file = {
         "arima": "summary_arima.csv",
@@ -31,6 +55,12 @@ def run_single_trial(algo, seed):
     return df_summary, df_run
 
 def run_multiple_trials():
+    """
+    Executes multiple trials for all algorithms, workload types, and intensities.
+
+    Returns:
+        tuple: Aggregated summary DataFrame and time-series data dictionary.
+    """
     aggregated_results = []
     time_series_data = {}
 
@@ -77,7 +107,12 @@ def run_multiple_trials():
     return df_agg, time_series_data
 
 def plot_comparisons(df_agg):
-    # Comparison bar plots as before
+    """
+    Generates comparison bar plots for different algorithms.
+
+    Args:
+        df_agg (pd.DataFrame): Aggregated summary data.
+    """
     for w_type in WORKLOAD_TYPES:
         for intensity in WORKLOAD_INTENSITIES:
             subset = df_agg[(df_agg["workload_type"] == w_type) &
@@ -95,11 +130,13 @@ def plot_comparisons(df_agg):
             plt.savefig(f"multi_trial_results/plots/{w_type}_{intensity}_comparison_bar.png")
             plt.close()
 
-def plot_boxplots(df_agg):
-    fig, ax = plt.subplots(figsize=(10, 6))
-  
-
 def plot_time_series(time_series_data):
+    """
+    Generates time-series comparison plots for all workload scenarios.
+
+    Args:
+        time_series_data (dict): Time-series data for all scenarios.
+    """
     for w_type in WORKLOAD_TYPES:
         for intensity in WORKLOAD_INTENSITIES:
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -121,6 +158,12 @@ def plot_time_series(time_series_data):
             plt.close()
 
 def plot_boxplots_per_scenario(time_series_data):
+    """
+    Generates boxplots for CPU utilization distribution across algorithms.
+
+    Args:
+        time_series_data (dict): Time-series data for all scenarios.
+    """
     for w_type in WORKLOAD_TYPES:
         for intensity in WORKLOAD_INTENSITIES:
             data_for_box = []
